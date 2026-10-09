@@ -1,0 +1,26 @@
+# Infisical self-hosted enterprise — thin patch on the official standalone image.
+#
+# Swaps the offline-license verification key in both license-aware processes:
+#   - Node backend: /backend/dist/lib/crypto/license_public_key.pem (read at runtime)
+#   - Go sidecar:   rebuilt with the swapped go:embed key
+# No feature-gating logic is touched; see scripts/APPROACH.md for the mechanism.
+#
+# Build (context = repo root):
+#   docker buildx build --load -t infisical-enterprise:v0.166.3 -f Dockerfile.enterprise .
+
+ARG BASE_IMAGE=infisical/infisical:v0.166.3
+
+FROM ${BASE_IMAGE} AS base
+
+FROM golang:1.26-trixie AS sidecar-build
+WORKDIR /src
+COPY backend-go/go.mod backend-go/go.sum ./
+RUN go mod download
+COPY backend-go/ ./
+# Explicit: the repo working tree carries the swapped key, but don't rely on it.
+COPY scripts/license_public_key.pem internal/ee/services/license/keys/license_public_key.pem
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o /go-sidecar ./cmd/infisical/main.go
+
+FROM base
+COPY scripts/license_public_key.pem /backend/dist/lib/crypto/license_public_key.pem
+COPY --from=sidecar-build /go-sidecar /backend/go-sidecar

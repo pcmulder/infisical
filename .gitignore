@@ -82,3 +82,6 @@ __pycache__
 # Local Codex design QA artifacts
 /.design-qa/
 /design-qa.md
+
+# Self-hosted enterprise: license signing key (never commit)
+scripts/.signing_key.pem
